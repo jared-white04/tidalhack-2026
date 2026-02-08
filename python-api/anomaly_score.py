@@ -57,10 +57,21 @@ def calculate_growth_rate(d0,df,l0,lf,w0,wf,time):
 
 def calculate_severity_score(rpr_scores, years):
     # takes in array of rpr scores from each year
+    
+    # Handle single data point case
+    if len(rpr_scores) <= 1:
+        # For new anomalies with only one data point, use the RPR value directly
+        # Lower RPR = higher severity
+        if len(rpr_scores) == 1:
+            return 1.0 - rpr_scores[0]  # Invert so low RPR gives high severity
+        else:
+            return 0.0  # No data
+    
     decay_rate_sum = 0
-    for i in range(0,len(rpr_scores)-1):
+    for i in range(0, len(rpr_scores) - 1):
         decay_rate = (rpr_scores[i+1] - rpr_scores[i]) / (years[i+1] - years[i])
         decay_rate_sum += decay_rate
+    
     decay_rate_sum /= -1 * (len(rpr_scores) - 1)  # Average decay rate
 
     years_until_implode = (rpr_scores[-1] - 1) / decay_rate_sum if decay_rate_sum != 0 else float('inf')  # Avoid division by zero

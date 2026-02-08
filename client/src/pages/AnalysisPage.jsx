@@ -33,7 +33,7 @@ function AnalysisPage() {
     }
 
     try {
-      await axios.patch(`/api/anomaly/${anomalyNumber}/viewed`)
+      await axios.patch(`http://localhost:8000/api/anomaly/${anomalyNumber}/viewed`)
       setAnalysisResults(prev => 
         prev.map(row => 
           row.anomalyNumber === anomalyNumber 

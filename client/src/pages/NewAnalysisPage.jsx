@@ -20,20 +20,34 @@ function NewAnalysisPage() {
   const handleRunAnalysis = async () => {
     setIsAnalyzing(true)
     try {
+      // First, upload the files
       const formData = new FormData()
       uploadedFiles.forEach(file => {
         formData.append('files', file)
       })
 
-      const response = await axios.post('/api/analyze', formData, {
+      const uploadResponse = await axios.post('http://localhost:8000/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       
+      console.log('Upload response:', uploadResponse.data)
+      
+      // Then run the analysis
+      const analysisResponse = await axios.post('http://localhost:8000/api/analyze')
+      
+      console.log('Analysis response:', analysisResponse.data)
+      
       // Navigate to analysis page with results
-      navigate('/analysis', { state: { results: response.data.results } })
+      navigate('/analysis', { 
+        state: { 
+          results: analysisResponse.data.results,
+          testMode: false 
+        } 
+      })
     } catch (error) {
       console.error('Analysis failed:', error)
-      alert('Analysis failed. Please try again.')
+      const errorMessage = error.response?.data?.error || error.message || 'Analysis failed. Please try again.'
+      alert(`Error: ${errorMessage}`)
     } finally {
       setIsAnalyzing(false)
     }
