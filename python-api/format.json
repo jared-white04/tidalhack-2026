@@ -12,7 +12,8 @@
         "width": "width [in]",
         "wall_thickness": "t [in]",
         "weld_type": null,
-        "elevation": null
+        "elevation": null,
+        "j_len": "J. len [ft]"
     },
 
     "ILI_2015": {
@@ -28,7 +29,8 @@
         "width": "Width [in]",
         "wall_thickness": "Wt [in]",
         "weld_type": null,
-        "elevation": null
+        "elevation": null,
+        "j_len": "J. len [ft]"
     },
 
     "ILI_2022": {
@@ -44,6 +46,7 @@
         "width": "Width [in]",
         "wall_thickness": "WT [in]",
         "weld_type": null,
-        "elevation": null
+        "elevation": null,
+        "j_len": "Joint Length [ft]"
     }
 }

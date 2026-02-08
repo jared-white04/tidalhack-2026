@@ -20,7 +20,7 @@ class ILI:
                 self.processed_data[target_col] = self.raw_data[source_col]
 
     def process(self):
-        cols_to_ffill = ['joint_number', 'wall_thickness']
+        cols_to_ffill = ['joint_number', 'wall_thickness', 'j_len']
         for col in cols_to_ffill:
             if col in self.processed_data.columns:
                 self.processed_data[col] = self.processed_data[col].ffill()
