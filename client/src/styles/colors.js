@@ -77,6 +77,13 @@ export const colors = {
     buttonHover: '#CA8A04',
     text:        '#1E293B',
   },
+
+  // Hero Section Settings
+  hero: {
+    darkOverlay:   'rgba(0, 0, 0, 0.5)',  // Dark overlay opacity (0.0 = transparent, 1.0 = solid black)
+    gradientStart: '40%',                  // Where gradient fade begins (0% = top, 100% = bottom)
+    gradientEnd:   '100%',                 // Where gradient fade ends
+  }
 };
 
 // Helper function to get color by path (e.g., 'primary.main')
