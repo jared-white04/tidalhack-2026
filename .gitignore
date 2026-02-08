@@ -10,3 +10,5 @@ env/
 *.xlsx
 *.pem
 *.csv
+client/node_modules/
+server/node_modules/
