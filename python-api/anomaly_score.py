@@ -29,7 +29,7 @@ def allignment_score(jlen_arr, logdist_arr, elevation_arr, rotation_arr):
     r_cv = r_stdev / r_mean if r_mean != 0 else 0
     score = 1 - (j_cv + l_cv + e_cv + r_cv) / 4  # Average CV and invert for score
     
-    print(score)
+
     return score
 
 def persistence_score(bool_arr):
@@ -37,7 +37,7 @@ def persistence_score(bool_arr):
     for i in bool_arr:
         if i:
             count += 1
-    print(count/len(bool_arr))
+ 
     return count / len(bool_arr) 
 
 def magnitude_score(depth):
@@ -45,7 +45,7 @@ def magnitude_score(depth):
     if depth <= 0:
         return 0.0
     
-    print(min(1.0, depth / threshold))
+ 
     return min(1.0, depth / threshold)
 
 def calculate_growth_rate(d0,df,l0,lf,w0,wf,time):
@@ -80,7 +80,7 @@ def main():
     depth = 0.5
     bool_arr = [True, True, False, True]
     confidence_score = calculate_confidence_score(jlen_arr, logdist_arr, elevation_arr, rotation_arr, depth, bool_arr)
-    print(f"Confidence Score: {confidence_score}")
+
     
     
     
