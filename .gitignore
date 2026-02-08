@@ -1,3 +1,14 @@
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+venv/
+env/
+*.xlsx
+*.pem
+*.csv
 client/node_modules/
 server/node_modules/
-node_modules/
