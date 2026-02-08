@@ -29,7 +29,7 @@
         "width": "Width [in]",
         "wall_thickness": "Wt [in]",
         "weld_type": null,
-        "elevation": null,
+        "elevation": "Elevation [ft]",
         "j_len": "J. len [ft]"
     },
 
@@ -46,7 +46,7 @@
         "width": "Width [in]",
         "wall_thickness": "WT [in]",
         "weld_type": null,
-        "elevation": null,
+        "elevation": "Elevation [ft]",
         "j_len": "Joint Length [ft]"
     }
 }
