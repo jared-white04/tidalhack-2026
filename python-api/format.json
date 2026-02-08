@@ -1,0 +1,52 @@
+{
+    "ILI_2007": {
+        "feature_id": null,
+        "distance": "log dist. [ft]",
+        "odometer": "log dist. [ft]",
+        "joint_number": "J. no.",
+        "relative_position": "to u/s w. [ft]",
+        "angle": "o'clock",
+        "feature_type": "event",
+        "depth_percent": "depth [%]",
+        "length": "length [in]",
+        "width": "width [in]",
+        "wall_thickness": "t [in]",
+        "weld_type": null,
+        "elevation": null,
+        "j_len": "J. len [ft]"
+    },
+
+    "ILI_2015": {
+        "feature_id": null,
+        "distance": "Log Dist. [ft]",
+        "odometer": "Log Dist. [ft]",
+        "joint_number": "J. no.",
+        "relative_position": "to u/s w. [ft]",
+        "angle": "O'clock",
+        "feature_type": "Event Description",
+        "depth_percent": "Depth [%]",
+        "length": "Length [in]",
+        "width": "Width [in]",
+        "wall_thickness": "Wt [in]",
+        "weld_type": null,
+        "elevation": null,
+        "j_len": "J. len [ft]"
+    },
+
+    "ILI_2022": {
+        "feature_id": null,
+        "distance": "ILI Wheel Count [ft.]",
+        "odometer": "ILI Wheel Count [ft.]",
+        "joint_number": "Joint Number",
+        "relative_position": "Distance to U/S GW [ft]",
+        "angle": "O'clock [hh:mm]",
+        "feature_type": "Event Description",
+        "depth_percent": "Metal Loss Depth [%]",
+        "length": "Length [in]",
+        "width": "Width [in]",
+        "wall_thickness": "WT [in]",
+        "weld_type": null,
+        "elevation": null,
+        "j_len": "Joint Length [ft]"
+    }
+}

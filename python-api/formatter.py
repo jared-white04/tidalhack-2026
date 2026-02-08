@@ -1,98 +1,99 @@
-# library imports
-import pandas as pd   # pandas - used for data processing
+import pandas as pd
+import json
 
-# path to the ILI data
-file_path = '../data/'
+FILE = 'format.json'
+PATH = '../data/'
 
-ILI_2007 = pd.read_csv(file_path + '/Cleaned_ILIDataV2-2007.csv')   # 2007 ILI data
-ILI_2015 = pd.read_csv(file_path + '/Cleaned_ILIDataV2-2015.csv')   # 2015 ILI data
-ILI_2022 = pd.read_csv(file_path + '/Cleaned_ILIDataV2-2022.csv')   # 2022 ILI data
+class ILI:
+    def __init__(self, file_name, format_mapping):
+        self.file_path = PATH + file_name
+        self.format = format_mapping
+        self.raw_data = pd.read_csv(self.file_path)
+        
+        self.raw_data.columns = self.raw_data.columns.str.replace(r'\s+', ' ', regex=True).str.strip()
+        self.processed_data = pd.DataFrame(columns=self.format.keys())
 
-# column names for new formatted table
-column_names = [
-    'feature_id',
-    'distance',
-    'odometer',
-    'joint_number',
-    'relative_position',
-    'angle',
-    'feature_type',
-    'depth_percent',
-    'length',
-    'width',
-    'wall_thickness',
-    'weld_type',
-    'elevation'
-]
+        for target_col, source_col in self.format.items():
+            if source_col is None:
+                self.processed_data[target_col] = None
+            else:
+                self.processed_data[target_col] = self.raw_data[source_col]
 
-fields_2007 = [
-    None,
-    'log dist. [ft]',
-    'log dist. [ft]',
-    'J. no.',
-    'to u/s w. [ft]',
-    'o\'clock',
-    'event',
-    'depth [%]',
-    'length [in]',
-    'width [in]',
-    't [in]',
-    None,
-    None
-]
+    def process(self):
+        cols_to_ffill = ['joint_number', 'wall_thickness', 'j_len']
+        for col in cols_to_ffill:
+            if col in self.processed_data.columns:
+                self.processed_data[col] = self.processed_data[col].ffill()
 
-ILI_2007_formatted = pd.DataFrame(columns=column_names)
-ILI_2015_formatted = pd.DataFrame(columns=column_names)
-ILI_2022_formatted = pd.DataFrame(columns=column_names)
+    def filter_anomalies(self):
+        anomalies_to_keep = [
+            'Cluster',
+            'metal loss',
+            'metal loss-manufacturing anomaly'
+        ]
+        
+        if 'feature_type' in self.processed_data.columns:
+             self.processed_data = self.processed_data[
+                self.processed_data['feature_type'].isin(anomalies_to_keep)
+             ]
 
-columns = len(column_names)
+    def generate_ids(self):
+        anomaly_codes = {
+            'Cluster': 'C',
+            'metal loss': 'ML',
+            'metal loss-manufacturing anomaly': 'ML'
+        }
+        
+        anomaly_col = self.processed_data['feature_type'].astype(str)
+        codes = anomaly_col.map(anomaly_codes)
+        
+        joint_str = self.processed_data['joint_number'].astype(float).round().astype('Int64').astype(str)
+        
+        self.processed_data['feature_id'] = codes + '-' + joint_str
 
-for index in range(columns):
-  column_name = column_names[index]
-  field_2007 = fields_2007[index]
+    def clock_to_degrees(self):
+        def _convert(time_str):
+            if not isinstance(time_str, str): return None
+            try:
+                hours, minutes = map(int, time_str.split(':'))
+                return (hours * 30) + (minutes * 0.5)
+            except:
+                return None
 
-  if field_2007 == None:
-    ILI_2007_formatted[column_name] = None
-  else:
-    ILI_2007_formatted[column_name] = ILI_2007[field_2007]
+        if 'angle' in self.processed_data.columns:
+             self.processed_data['angle'] = self.processed_data['angle'].apply(_convert)
 
-ILI_2007_formatted['joint_number'] = ILI_2007_formatted['joint_number'].ffill()
-ILI_2007_formatted['wall_thickness'] = ILI_2007_formatted['wall_thickness'].ffill()
+    def normalize_depth(self):
+        if 'depth_percent' in self.processed_data.columns:
+            self.processed_data['depth_percent'] = self.processed_data['depth_percent'] / 100
 
-anomaly_codes = {
-    'Cluster': 'C',
-    'metal loss': 'ML',
-    'metal loss-manufacturing anomaly': 'ML'
+    def clean_relative_position(self):
+        if 'relative_position' in self.processed_data.columns:
+            self.processed_data['relative_position'] = self.processed_data['relative_position'].abs()
+
+    def save_csv(self, output_name):
+        self.processed_data.to_csv(PATH + output_name, index=False)
+
+
+with open(FILE, 'r') as file:
+    data = json.load(file)
+
+ili_objects = {
+    '2007': ILI('Cleaned_ILIDataV2-2007.csv', data['ILI_2007']),
+    '2015': ILI('Cleaned_ILIDataV2-2015.csv', data['ILI_2015']),
+    '2022': ILI('Cleaned_ILIDataV2-2022.csv', data['ILI_2022'])
 }
 
-anomaly = ILI_2007_formatted['feature_type'].astype(str)
-code = anomaly.map(anomaly_codes)
-
-ILI_2007_formatted['feature_id'] = code + '-' + ILI_2007_formatted['joint_number'].astype('Int64').astype(str)
-
-anomalies_2007 = [
-    'Cluster',
-    'metal loss',
-    'metal loss-manufacturing anomaly'
-]
-
-ILI_2007_formatted = ILI_2007_formatted[
-    ILI_2007_formatted['feature_type'].isin(anomalies_2007)
-]
-
-ILI_2007_formatted['relative_position'] = ILI_2007_formatted['relative_position'].abs()
-
-def time_to_degrees(time):
-  separator = ':'
-  index = time.find(separator)
-
-  hours = int(time[:index])
-  minutes = int(time[(index + 1):])
-
-  angle = (hours * 30) + (minutes * 0.5)
-  return angle
-
-ILI_2007_formatted['angle'] = ILI_2007_formatted['angle'].apply(time_to_degrees)
-ILI_2007_formatted['depth_percent'] = ILI_2007_formatted['depth_percent'].apply(lambda x: x / 100)
-
-ILI_2007_formatted.to_csv(file_path + '/ILI_2007_formatted.csv')
+for year, ili_obj in ili_objects.items():
+    print(f"Processing {year}...")
+    
+    ili_obj.process()
+    
+    ili_obj.filter_anomalies()
+    ili_obj.generate_ids()
+    ili_obj.clock_to_degrees()
+    ili_obj.normalize_depth()
+    ili_obj.clean_relative_position()
+    
+    ili_obj.save_csv(f'ILI_{year}_formatted.csv')
+    print(f"Finished {year}.")
