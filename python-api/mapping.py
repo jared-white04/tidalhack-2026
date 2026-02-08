@@ -13,36 +13,36 @@ No Specified Naming Convention for name file
 Below is the columns and rows for each assigned file in the given file directory sent to this file
 ,feature_id,distance,odometer,joint_number,relative_position,angle,feature_type,depth_percent,length,width,wall_thickness,weld_type,elevation
 24,C-70,125.12,125.12,70.0,21.69,272.0,Cluster,0.16,3.55,2.64,0.344,,
+
+Also calls onto data type: "Cleaned_ILIDataV2-2022.csv for data like j_len, and log_dist. Elevation will come in dates later than 2007 (i.e. 2015 and 2022)
 ''' 
 
 
 '''
-@param file directory of formatted csv files taken for a single pipeline 
-@return new formatted data file with added values of j_len, log_dist, elevation, and rotation
+Further Notes:
+How it compares and aggregates across the directory:
+File Gathering: glob.glob(os.path.join(target_dir, "*.csv")) finds every single CSV file in your folder.
+
+Chronological Sort: The code uses Regex to extract the years and sorts the entire list of files (both Cleaned and Formatted) from oldest to newest.
+
+The Anchor: It sets the oldest formatted file as the baseline_signal. This is the "map" that all other files must match.
+
+The Comparative Loop: for file_info in sorted_all_files: iterates through every year. For each file:
+
+It runs a new DTW calculation comparing that specific year's elevation profile to the baseline.
+
+It identifies the exact row in the new file that corresponds to your baseline anomalies.
+
+It updates the j_len, rotation, log_dist, and elevation columns with the data from that file.
 '''
-# def process_directory(directory_path: str):
-#     # find all csv files relevant within the directory (all properly formatted paths)
-
-#     # sort the list of files in the directory by year (not sorted in the file name and must be found)
-
-#     # create a list of all anomalies found in the first year (determined by the "feature_id")
-
-#     # iterate through the following years into the next year (works solely new file by new file)
-
-#         # match all current anomalies from the first year into the next year using DTW (this is it's joint length)
-#         # match all the rotation of each anomaly, should be approximated from using DTW
-#         # match all points the elevation of an anomaly is found
-#         # match it's log_dist as it's current_dist(?) from the starting position by adding up all new positions to current
-
-#     # create a master table of all current pipelines into a new file
-
-#     return
 
 def compute_custom_dtw(series_a, series_b):
+    """
+    Computes the optimal path between the baseline (A) and current run (B).
+    """
     n, m = len(series_a), len(series_b)
     cost_matrix = np.full((n + 1, m + 1), np.inf)
     cost_matrix[0, 0] = 0
-
     for i in range(1, n + 1):
         for j in range(1, m + 1):
             dist = np.linalg.norm(series_a[i-1] - series_b[j-1])
@@ -60,87 +60,87 @@ def compute_custom_dtw(series_a, series_b):
     return path[::-1]
 
 def process_directory(input_path: str):
-    # 1. Identify the Directory
-    # If user passed a file, get the directory containing that file
-    if os.path.isfile(input_path):
-        target_dir = os.path.dirname(input_path)
-    else:
-        target_dir = input_path
-
-    # Use absolute path to avoid confusion
-    target_dir = os.path.abspath(target_dir)
+    target_dir = os.path.abspath(os.path.dirname(input_path) if os.path.isfile(input_path) else input_path)
     output_folder = os.path.join(target_dir, "Aligned_Results")
+    if not os.path.exists(output_folder): os.makedirs(output_folder)
 
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # 2. Find and sort files
-    file_pattern = os.path.join(target_dir, "ILI_*_formatted.csv")
-    file_paths = glob.glob(file_pattern)
-    
-    if not file_paths:
-        return f"Error: No files matching 'ILI_year_formatted.csv' found in {target_dir}"
-
+    # 1. Collect and Identify all files in the directory
+    file_paths = glob.glob(os.path.join(target_dir, "*.csv"))
     file_metadata = []
     for fp in file_paths:
-        match = re.search(r'ILI_(\d+)_formatted\.csv', os.path.basename(fp))
-        if match:
-            file_metadata.append({'path': fp, 'year': int(match.group(1))})
+        fname = os.path.basename(fp)
+        m1 = re.search(r'ILI_(\d+)_formatted\.csv', fname)
+        m2 = re.search(r'Cleaned_ILIDataV2-(\d+)\.csv', fname)
+        if m1:
+            file_metadata.append({'path': fp, 'year': int(m1.group(1)), 'type': 'formatted'})
+        elif m2:
+            file_metadata.append({'path': fp, 'year': int(m2.group(1)), 'type': 'cleaned'})
+
+    # 2. Establish Anchor (The chronologically first 'formatted' file)
+    formatted_files = sorted([f for f in file_metadata if f['type'] == 'formatted'], key=lambda x: x['year'])
+    if not formatted_files:
+        return "Error: No 'ILI_year_formatted.csv' found to anchor features."
     
-    sorted_files = sorted(file_metadata, key=lambda x: x['year'])
-    
-    # 3. Establish Baseline
-    try:
-        baseline_df = pd.read_csv(sorted_files[0]['path'])
-    except PermissionError:
-        return f"Permission Denied: Close {sorted_files[0]['path']} in Excel and try again."
-    
+    baseline_info = formatted_files[0]
+    baseline_df = pd.read_csv(baseline_info['path'])
+    baseline_signal = baseline_df[['elevation']].fillna(0).values
+
+    # Initialize Master Table with baseline features
     master_df = baseline_df[baseline_df['feature_id'].notnull()].copy()
-    # Use 'distance' as the primary log position
-    master_df['real_log_dist'] = master_df['distance']
-
-    # 4. Iterate and Align
-    for file_info in sorted_files[1:]:
-        current_year = file_info['year']
-        try:
-            current_df = pd.read_csv(file_info['path'])
-        except PermissionError:
-            return f"Permission Denied: Close {file_info['path']} in Excel."
-        
-        # signal alignment using angle and elevation
-        base_signal = baseline_df[['elevation', 'angle']].fillna(0).values
-        curr_signal = current_df[['elevation', 'angle']].fillna(0).values
-        
-        path_indices = compute_custom_dtw(base_signal, curr_signal)
-        mapping = dict(path_indices)
-        year_suffix = f"_{current_year}"
-        
-        def get_curr_val(base_idx, col_name_in_csv):
-            curr_idx = mapping.get(base_idx)
-            if curr_idx is not None and curr_idx < len(current_df):
-                return current_df.iloc[curr_idx][col_name_in_csv]
-            return np.nan
-
-        # Mapping the specific CSV columns to your desired Master Table headers
-        # CSV 'angle' -> Master 'rotation'
-        master_df[f'rotation{year_suffix}'] = [get_curr_val(i, 'angle') for i in master_df.index]
-        
-        # CSV 'elevation' -> Master 'elevation'
-        master_df[f'elevation{year_suffix}'] = [get_curr_val(i, 'elevation') for i in master_df.index]
-        
-        # CSV 'length' -> Master 'j_len' (Joint Length)
-        master_df[f'j_len{year_suffix}'] = [get_curr_val(i, 'length') for i in master_df.index]
-        
-        # CSV 'distance' -> Master 'log_dist'
-        master_df[f'log_dist{year_suffix}'] = [get_curr_val(i, 'distance') for i in master_df.index]
-
-        
-    # 5. Save Results
-    pipeline_id = os.path.basename(target_dir)
-    final_path = os.path.join(output_folder, f"Master_Alignment_{pipeline_id}.csv")
     
+    # Initialize generalized columns
+    master_df['j_len'] = np.nan
+    master_df['rotation'] = np.nan
+    master_df['log_dist'] = np.nan
+    master_df['elevation'] = np.nan
+
+    # 3. Define Schema Mapping
+    schema_map = {
+        'j_len': ('J. len [ft]', 'length'),
+        'rotation': (None, 'angle'), 
+        'log_dist': ('log dist. [ft]', 'distance'),
+        'elevation': ('Height [ft]', 'elevation')
+    }
+
+    # 4. Process Every File Chronologically (Matching each to Baseline)
+    sorted_all_files = sorted(file_metadata, key=lambda x: x['year'])
+    
+    for file_info in sorted_all_files:
+        current_type = file_info['type']
+        current_year = file_info['year']
+        current_df = pd.read_csv(file_info['path'])
+        
+        # Determine current signal column for DTW
+        elev_col = 'Height [ft]' if current_type == 'cleaned' else 'elevation'
+        if elev_col not in current_df.columns: 
+            continue
+
+        # PERFORM DTW: Align current file to the original Baseline signal
+        curr_signal = current_df[[elev_col]].fillna(0).values
+        path_indices = compute_custom_dtw(baseline_signal, curr_signal)
+        mapping = dict(path_indices)
+
+        # Update Generalized Columns based on matching results
+        for target_col, (clean_col, format_col) in schema_map.items():
+            # Source selection
+            source_col = clean_col if current_type == 'cleaned' else format_col
+            
+            # Skip rotation if it's a cleaned file
+            if target_col == 'rotation' and current_type == 'cleaned':
+                continue
+            
+            if source_col and source_col in current_df.columns:
+                def get_val(base_idx):
+                    curr_idx = mapping.get(base_idx)
+                    return current_df.iloc[curr_idx][source_col] if curr_idx is not None else np.nan
+
+                # Overwrite master columns with latest matches from this specific year
+                master_df[target_col] = [get_val(idx) for idx in master_df.index]
+
+    # 5. Save Results
+    final_path = os.path.join(output_folder, "Master_Alignment_Longitudinal.csv")
     master_df.to_csv(final_path, index=False)
-    return f"Success! Master file created at: {final_path}"
+    return f"Success! Longitudinal Generalized Master file created at: {final_path}"
 
 # --- Set your path here ---
 # It's safer to point to the data directory itself
