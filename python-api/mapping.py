@@ -1,19 +1,18 @@
-import panda as pd
+import pandas as pd
 import numpy as np
 import os
 import glob
-
-
-
-
+import re
 
 '''
 Notes for the File
 all imports above will be used and more may be added
 the process_directory is the main channel by which the files are utilized in matching anomalies between years
 
-Naming Convention
-Year - Pipeline Name - 
+No Specified Naming Convention for name file 
+Below is the columns and rows for each assigned file in the given file directory sent to this file
+,feature_id,distance,odometer,joint_number,relative_position,angle,feature_type,depth_percent,length,width,wall_thickness,weld_type,elevation
+24,C-70,125.12,125.12,70.0,21.69,272.0,Cluster,0.16,3.55,2.64,0.344,,
 ''' 
 
 
@@ -21,108 +20,123 @@ Year - Pipeline Name -
 @param file directory of formatted csv files taken for a single pipeline 
 @return new formatted data file with added values of j_len, log_dist, elevation, and rotation
 '''
-def process_directory(directory_path: str):
-    # find all csv files relevant within the directory (all properly formatted paths)
+# def process_directory(directory_path: str):
+#     # find all csv files relevant within the directory (all properly formatted paths)
 
-    # sort the list of files in the directory by year
+#     # sort the list of files in the directory by year (not sorted in the file name and must be found)
 
-    # create a list of all anomalies found in the first year
+#     # create a list of all anomalies found in the first year (determined by the "feature_id")
 
-    # iterate through the following years into the next year (works solely new file by new file)
+#     # iterate through the following years into the next year (works solely new file by new file)
 
-        # match all current anomalies from the first year into the next year using DTW (this is it's joint length)
-        # match all the rotation of each anomaly, should be approximated from using DTW
-        # match all points the elevation of an anomaly is found
-        # match it's log_dist as it's current_dist(?) from the starting position
+#         # match all current anomalies from the first year into the next year using DTW (this is it's joint length)
+#         # match all the rotation of each anomaly, should be approximated from using DTW
+#         # match all points the elevation of an anomaly is found
+#         # match it's log_dist as it's current_dist(?) from the starting position by adding up all new positions to current
 
-    # create a master table of all current pipelines into a new file
+#     # create a master table of all current pipelines into a new file
 
-    return
+#     return
 
-
-
-
-
-import pandas as pd
-import numpy as np
-import os
-import glob
-
-def compute_dtw_alignment(series_a, series_b):
+def compute_custom_dtw(series_a, series_b):
     """
-    Computes the DTW distance and path without external libraries.
-    Uses Euclidean distance as the cost metric.
+    Standard DTW implementation to find the optimal alignment path.
     """
     n, m = len(series_a), len(series_b)
-    # Initialize cost matrix with infinity
     cost_matrix = np.full((n + 1, m + 1), np.inf)
     cost_matrix[0, 0] = 0
 
-    # Fill the cost matrix
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            # Calculate Euclidean distance between points
+            # Distance calculation between features
             dist = np.linalg.norm(series_a[i-1] - series_b[j-1])
-            # The cost is the current distance + the minimum of the 3 neighbor cells
-            cost_matrix[i, j] = dist + min(cost_matrix[i-1, j],    # Insertion
-                                          cost_matrix[i, j-1],    # Deletion
-                                          cost_matrix[i-1, j-1])  # Match
+            cost_matrix[i, j] = dist + min(cost_matrix[i-1, j], 
+                                           cost_matrix[i, j-1], 
+                                           cost_matrix[i-1, j-1])
 
-    # Backtrack to find the optimal path
     path = []
     i, j = n, m
     while i > 0 and j > 0:
         path.append((i - 1, j - 1))
-        # Find the direction of the minimum cost
         option = np.argmin([cost_matrix[i-1, j-1], cost_matrix[i-1, j], cost_matrix[i, j-1]])
-        if option == 0:
-            i, j = i - 1, j - 1
-        elif option == 1:
-            i -= 1
-        else:
-            j -= 1
-            
-    return cost_matrix[n, m], path[::-1]
+        if option == 0: i, j = i - 1, j - 1
+        elif option == 1: i -= 1
+        else: j -= 1
+    return path[::-1]
 
 def process_directory(directory_path: str):
-    # 1. Gather and sort files by Year
-    all_files = glob.glob(os.path.join(directory_path, "*.csv"))
-    # Sort assumes "YYYY - PipelineName" format
-    all_files.sort(key=lambda x: os.path.basename(x).split(' - ')[0])
-    
-    if len(all_files) < 2:
-        print("Need at least two files to perform matching.")
-        return None
+    # 1. Setup Output Directory
+    output_folder = os.path.join(directory_path, "Aligned_Results")
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
-    # 2. Load baseline (First Year)
-    master_df = pd.read_csv(all_files[0])
-    
-    # 3. Iterate and match
-    for next_file in all_files[1:]:
-        year_label = os.path.basename(next_file).split(' - ')[0]
-        current_df = pd.read_csv(next_file)
+    # 2. Find and sort files based on "ILI_year_formatted.csv" pattern
+    # Regex extracts the digits between 'ILI_' and '_formatted' 
+    file_paths = glob.glob(os.path.join(directory_path, "ILI_*_formatted.csv"))
+    if not file_paths:
+        return "Error: No files matching 'ILI_year_formatted.csv' found."
 
-        # Prepare signals (Elevation and Rotation are critical for alignment)
-        # We normalize columns to ensure rotation doesn't outweigh elevation
-        base_signal = master_df[['elevation', 'rotation']].values
+    file_metadata = []
+    for fp in file_paths:
+        match = re.search(r'ILI_(\d+)_formatted\.csv', os.path.basename(fp))
+        if match:
+            year = int(match.group(1))
+            file_metadata.append({'path': fp, 'year': year})
+    
+    # Sort files chronologically by the extracted year
+    sorted_files = sorted(file_metadata, key=lambda x: x['year'])
+    
+    # 3. Establish Baseline (First Chronological Year)
+    baseline_info = sorted_files[0]
+    baseline_df = pd.read_csv(baseline_info['path'])
+    
+    # Track anomalies identified by feature_id
+    master_df = baseline_df[baseline_df['feature_id'].notnull()].copy()
+    
+    # Starting 'real_log_dist' is the cumulative distance in the first run
+    master_df['real_log_dist'] = master_df['log_dist'].cumsum()
+
+    # 4. Iterate and Align via DTW
+    for file_info in sorted_files[1:]:
+        current_year = file_info['year']
+        current_df = pd.read_csv(file_info['path'])
+        
+        # Prepare signals for physical matching (elevation and rotation)
+        base_signal = baseline_df[['elevation', 'rotation']].values
         curr_signal = current_df[['elevation', 'rotation']].values
-
-        # 4. Run Custom DTW
-        _, path = compute_dtw_alignment(base_signal, curr_signal)
         
-        # Create a mapping dictionary {baseline_idx: current_year_idx}
-        mapping = dict(path)
+        # Run DTW to align the whole pipeline run
+        path = compute_custom_dtw(base_signal, curr_signal)
+        mapping = dict(path) 
 
-        # 5. Populate new values
-        # j_len: joint length (distance between records in current year)
-        # log_dist: position in the current year
-        master_df[f'{year_label}_log_dist'] = [current_df.iloc[mapping[i]]['log_dist'] if i in mapping else np.nan for i in range(len(master_df))]
-        master_df[f'{year_label}_elevation'] = [current_df.iloc[mapping[i]]['elevation'] if i in mapping else np.nan for i in range(len(master_df))]
-        master_df[f'{year_label}_rotation'] = [current_df.iloc[mapping[i]]['rotation'] if i in mapping else np.nan for i in range(len(master_df))]
+        year_suffix = f"_{current_year}"
         
-        # Calculate joint length based on the log_dist diff in the current file
-        master_df[f'{year_label}_j_len'] = master_df[f'{year_label}_log_dist'].diff().abs().fillna(0)
+        def get_curr_val(base_idx, col):
+            curr_idx = mapping.get(base_idx)
+            if curr_idx is not None and curr_idx < len(current_df):
+                return current_df.iloc[curr_idx][col]
+            return np.nan
 
-    # 6. Export Master Table
-    master_df.to_csv("Master_Anomaly_Tracking.csv", index=False)
-    return master_df
+        # Map current year data back to the original anomaly list
+        master_df[f'rotation{year_suffix}'] = [get_curr_val(i, 'rotation') for i in master_df.index]
+        master_df[f'elevation{year_suffix}'] = [get_curr_val(i, 'elevation') for i in master_df.index]
+        master_df[f'j_len{year_suffix}'] = [get_curr_val(i, 'j_len') for i in master_df.index]
+        
+        # Update Real-position: Accumulated log_dist from the matched positions
+        current_log_distances = [get_curr_val(i, 'log_dist') for i in master_df.index]
+        master_df[f'log_dist{year_suffix}'] = np.cumsum(np.nan_to_num(current_log_distances))
+
+    # 5. Save to the organized folder
+    pipeline_id = os.path.basename(directory_path.rstrip(os.sep))
+    final_filename = f"Master_Alignment_{pipeline_id}.csv"
+    final_output_path = os.path.join(output_folder, final_filename)
+    
+    master_df.to_csv(final_output_path, index=False)
+
+    return f"Success! Master file created: {final_output_path}"
+
+
+#C:/Users/marcj/Documents (Computer)/TAMU/Hackathon/tidalhack-2026/
+file_dir = "data/"
+
+print(process_directory(file_dir))
