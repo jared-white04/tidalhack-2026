@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import json
 
 FILE = 'format.json'
@@ -86,23 +87,26 @@ class ILI:
     def save_csv(self, output_name):
         self.processed_data.to_csv(PATH + output_name, index=False)
 
-if __name__ == "__main__":
-    with open(FILE, 'r') as file:
-        data = json.load(file)
 
-    ili_objects = {
-        '2007': ILI('Cleaned_ILIDataV2-2007.csv', data['ILI_2007']),
-        '2015': ILI('Cleaned_ILIDataV2-2015.csv', data['ILI_2015']),
-        '2022': ILI('Cleaned_ILIDataV2-2022.csv', data['ILI_2022'])
-    }
+with open(FILE, 'r') as file:
+    data = json.load(file)
 
-    for year, ili_obj in ili_objects.items():
-        print(f"Processing {year}...")
-        ili_obj.process()
-        ili_obj.filter_anomalies()
-        ili_obj.generate_ids()
-        ili_obj.clock_to_degrees()
-        ili_obj.normalize_depth()
-        ili_obj.clean_relative_position()
-        ili_obj.save_csv(f'ILI_{year}_formatted.csv')
-        print(f"Finished {year}.")
+ili_objects = {
+    '2007': ILI('Cleaned_ILIDataV2-2007.csv', data['ILI_2007']),
+    '2015': ILI('Cleaned_ILIDataV2-2015.csv', data['ILI_2015']),
+    '2022': ILI('Cleaned_ILIDataV2-2022.csv', data['ILI_2022'])
+}
+
+for year, ili_obj in ili_objects.items():
+    print(f"Processing {year}...")
+    
+    ili_obj.process()
+    
+    ili_obj.filter_anomalies()
+    ili_obj.generate_ids()
+    ili_obj.clock_to_degrees()
+    ili_obj.normalize_depth()
+    ili_obj.clean_relative_position()
+    
+    ili_obj.save_csv(f'ILI_{year}_formatted.csv')
+    print(f"Finished {year}.")
