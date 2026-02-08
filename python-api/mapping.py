@@ -70,13 +70,20 @@ def compute_custom_dtw(series_a, series_b):
     path = []
     i, j = n, m
     while i > 0 and j > 0:
-        path.append((i - 1, j - 1))
+        # path.append((i - 1, j - 1))
         candidates = []
         if i > 0 and j > 0: candidates.append((cost_matrix[i-1, j-1], 0)) 
         if i > 1:           candidates.append((cost_matrix[i-1, j], 1))   
         if j > 1:           candidates.append((cost_matrix[i, j-1], 2))   
-        best_move = min(candidates, key=lambda x: x[0])[1]
         
+        best_move = min(candidates, key=lambda x: x[0])[1]
+        print("best_move: " + str(best_move))
+
+        if best_move > 8:
+            continue 
+        
+        path.append((i - 1, j - 1))
+
         if best_move == 0: i, j = i - 1, j - 1
         elif best_move == 1: i -= 1
         else: j -= 1
@@ -124,7 +131,7 @@ def process_directory(script_path: str):
     
     # Initialize Target Columns
     # log_dist and rotation are initialized as NaN, to be filled by the latest aligned data
-    target_cols = ['confidence', 'severity', 'growth_rate', 'j_len', 'log_dist', 'elevation', 'rotation']
+    target_cols = ['confidence', 'severity', 'persistence', 'growth_rate', 'j_len', 'log_dist', 'elevation', 'rotation']
     for col in target_cols:
         if col not in master_df.columns: master_df[col] = np.nan
 
@@ -137,7 +144,7 @@ def process_directory(script_path: str):
     for file_info in sorted_files:
         current_year = file_info['year']
         current_df = pd.read_csv(file_info['path'])
-        print(f"Aligning {current_year}...")
+        # print(f"Aligning {current_year}...")
 
         # Determine RPR (Remaining Pipe Strength)
         # If mod_b31g exists, use it. Otherwise use (1 - depth) as a proxy.
@@ -186,6 +193,7 @@ def process_directory(script_path: str):
             else:
                 history[i]['bool'].append(False)
 
+
     # 5. Calculate Scores (Using imported functions)
     for i in range(len(master_df)):
         h = history[i]
@@ -203,6 +211,10 @@ def process_directory(script_path: str):
         sev = calculate_severity_score(h['rpr'], h['year'])
         master_df.at[i, 'severity'] = round(sev, 4)
         
+        # Persistence Score
+        persistence_val = h['year'][-1] - h['year'][0]
+        master_df.at[i, 'persistence'] = persistence_val
+
         # Growth Rate
         if len(h['year']) >= 2:
             gr = calculate_growth_rate(
@@ -224,7 +236,7 @@ def process_directory(script_path: str):
     
     # Select columns (excluding persistence)
     final_cols = ['anomaly_no', 'joint_no', 'start_distance', 'anomaly_type', 
-                  'confidence', 'severity', 'growth_rate', 'viewed',
+                  'confidence', 'severity', 'persistence', 'growth_rate', 'viewed',
                   'j_len', 'log_dist', 'elevation', 'rotation']
     
     # Append any extra green columns if they exist
@@ -236,6 +248,7 @@ def process_directory(script_path: str):
     master_df.to_csv(final_path, index=False)
     
     return f"Success! Results saved to: {final_path}"
+
 
 if __name__ == "__main__":
     print(process_directory(__file__))
