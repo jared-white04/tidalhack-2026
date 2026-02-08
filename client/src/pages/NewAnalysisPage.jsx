@@ -4,36 +4,67 @@ import FileUpload from '../components/FileUpload'
 import colors from '../styles/colors'
 import axios from 'axios'
 
+// API base URL - change this if backend is on different port
+const API_BASE_URL = 'http://localhost:8000'
+
 function NewAnalysisPage() {
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState(null)
   const navigate = useNavigate()
 
   const handleFilesUploaded = (files) => {
     setUploadedFiles(prev => [...prev, ...files])
+    setUploadStatus(null)
   }
 
   const handleRemoveFile = (index) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
+  const checkBackendHealth = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/health`, { timeout: 3000 })
+      return response.data.status === 'healthy'
+    } catch (error) {
+      return false
+    }
+  }
+
   const handleRunAnalysis = async () => {
     setIsAnalyzing(true)
+    setUploadStatus(null)
+    
     try {
+      // Check if backend is running
+      const isHealthy = await checkBackendHealth()
+      if (!isHealthy) {
+        throw new Error('Backend server is not running. Please start the Python API server on port 8000.')
+      }
+
       // First, upload the files
+      setUploadStatus('Uploading files...')
       const formData = new FormData()
       uploadedFiles.forEach(file => {
         formData.append('files', file)
       })
 
-      const uploadResponse = await axios.post('http://localhost:8000/api/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const uploadResponse = await axios.post(`${API_BASE_URL}/api/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000 // 30 second timeout
       })
       
       console.log('Upload response:', uploadResponse.data)
       
+      if (uploadResponse.data.errors && uploadResponse.data.errors.length > 0) {
+        alert(`Warning: Some files had issues:\n${uploadResponse.data.errors.join('\n')}`)
+      }
+      
       // Then run the analysis
-      const analysisResponse = await axios.post('http://localhost:8000/api/analyze')
+      setUploadStatus('Running analysis... This may take a few minutes.')
+      const analysisResponse = await axios.post(`${API_BASE_URL}/api/analyze`, {}, {
+        timeout: 300000 // 5 minute timeout
+      })
       
       console.log('Analysis response:', analysisResponse.data)
       
@@ -46,8 +77,22 @@ function NewAnalysisPage() {
       })
     } catch (error) {
       console.error('Analysis failed:', error)
-      const errorMessage = error.response?.data?.error || error.message || 'Analysis failed. Please try again.'
-      alert(`Error: ${errorMessage}`)
+      
+      let errorMessage = 'Analysis failed. '
+      
+      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+        errorMessage += 'Cannot connect to backend server. Please ensure the Python API is running on port 8000.\n\nTo start the backend:\n1. Open a terminal\n2. cd python-api\n3. python app.py'
+      } else if (error.response?.data?.error) {
+        errorMessage += error.response.data.error
+        if (error.response.data.details) {
+          errorMessage += '\n\nDetails: ' + error.response.data.details
+        }
+      } else {
+        errorMessage += error.message || 'Unknown error occurred.'
+      }
+      
+      alert(errorMessage)
+      setUploadStatus(null)
     } finally {
       setIsAnalyzing(false)
     }
@@ -81,6 +126,12 @@ function NewAnalysisPage() {
           uploadedFiles={uploadedFiles}
           onRemoveFile={handleRemoveFile}
         />
+
+        {uploadStatus && (
+          <div className="mt-6 p-4 rounded-lg" style={{ backgroundColor: colors.status.info + '20', borderLeft: `4px solid ${colors.status.info}` }}>
+            <p style={{ color: colors.text.primary }}>{uploadStatus}</p>
+          </div>
+        )}
 
         {uploadedFiles.length > 0 && (
           <div className="mt-8 flex gap-4 justify-center">

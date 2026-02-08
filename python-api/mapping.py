@@ -330,6 +330,19 @@ def process_directory(script_path: str):
     # 6. Save Final Result
     final_path = os.path.join(output_folder, "Master_Alignment_Final.csv")
     
+    # Close any open file handles and ensure we can write
+    try:
+        # Try to remove the file if it exists to avoid permission issues
+        if os.path.exists(final_path):
+            os.remove(final_path)
+    except Exception as e:
+        print(f"Warning: Could not remove existing file: {e}")
+        # Try with a timestamped filename instead
+        import time
+        timestamp = int(time.time())
+        final_path = os.path.join(output_folder, f"Master_Alignment_Final_{timestamp}.csv")
+        print(f"Using alternate filename: {final_path}")
+    
     # Select columns (including persistence)
     final_cols = ['anomaly_no', 'joint_no', 'start_distance', 'anomaly_type', 
                   'confidence', 'severity', 'persistence', 'growth_rate', 'viewed',
@@ -339,7 +352,10 @@ def process_directory(script_path: str):
     extra_cols = ['internal', 'ml_depth', 'ml_depth_lenth', 'width', 'mod_b31g']
     for c in extra_cols:
         if c in master_df.columns: final_cols.append(c)
-        
+    
+    # Ensure anomaly_no is properly formatted (convert any strings to sequential numbers)
+    master_df['anomaly_no'] = range(1, len(master_df) + 1)
+    
     master_df = master_df[final_cols]
     master_df.to_csv(final_path, index=False)
     

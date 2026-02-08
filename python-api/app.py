@@ -109,26 +109,61 @@ def analyze():
         # Read the results CSV
         results_file = os.path.join(RESULTS_FOLDER, 'Master_Alignment_Final.csv')
         
+        # If the main file doesn't exist, look for timestamped versions
         if not os.path.exists(results_file):
-            return jsonify({'error': 'Results file not generated'}), 500
+            # Look for any Master_Alignment_Final*.csv files
+            import glob
+            pattern = os.path.join(RESULTS_FOLDER, 'Master_Alignment_Final*.csv')
+            files = glob.glob(pattern)
+            if files:
+                # Use the most recent one
+                results_file = max(files, key=os.path.getmtime)
+                print(f"Using results file: {results_file}")
+            else:
+                return jsonify({'error': 'Results file not generated'}), 500
         
         # Load and format results for frontend
         df = pd.read_csv(results_file)
         
         # Convert to format expected by frontend
         results = []
-        for _, row in df.iterrows():
-            results.append({
-                'anomalyNumber': int(row['anomaly_no']) if pd.notna(row['anomaly_no']) else None,
-                'jointNumber': int(row['joint_no']) if pd.notna(row['joint_no']) else None,
-                'startDistance': str(row['start_distance']) if pd.notna(row['start_distance']) else '',
-                'anomalyType': str(row['anomaly_type']) if pd.notna(row['anomaly_type']) else '',
-                'confidence': float(row['confidence']) if pd.notna(row['confidence']) else 0,
-                'severity': float(row['severity']) if pd.notna(row['severity']) else 0,
-                'persistence': int(row['persistence']) if pd.notna(row['persistence']) else 0,
-                'growthRate': float(row['growth_rate']) if pd.notna(row['growth_rate']) else 0,
-                'viewed': 'Y' if row['viewed'] == 'Yes' else 'N'
-            })
+        for idx, row in df.iterrows():
+            try:
+                # Handle anomaly_no - could be numeric or string like 'C-70'
+                anomaly_no = row['anomaly_no']
+                if pd.notna(anomaly_no):
+                    try:
+                        anomaly_no = int(anomaly_no)
+                    except (ValueError, TypeError):
+                        # If it's a string like 'C-70', use the index as fallback
+                        anomaly_no = idx + 1
+                else:
+                    anomaly_no = idx + 1
+                
+                # Handle joint_no - ensure it's an integer
+                joint_no = row['joint_no']
+                if pd.notna(joint_no):
+                    try:
+                        joint_no = int(float(joint_no))  # Convert via float first to handle decimals
+                    except (ValueError, TypeError):
+                        joint_no = 0
+                else:
+                    joint_no = 0
+                
+                results.append({
+                    'anomalyNumber': anomaly_no,
+                    'jointNumber': joint_no,
+                    'startDistance': str(row['start_distance']) if pd.notna(row['start_distance']) else '',
+                    'anomalyType': str(row['anomaly_type']) if pd.notna(row['anomaly_type']) else '',
+                    'confidence': float(row['confidence']) if pd.notna(row['confidence']) else 0,
+                    'severity': float(row['severity']) if pd.notna(row['severity']) else 0,
+                    'persistence': int(row['persistence']) if pd.notna(row['persistence']) else 0,
+                    'growthRate': float(row['growth_rate']) if pd.notna(row['growth_rate']) else 0,
+                    'viewed': 'Y' if row['viewed'] == 'Yes' else 'N'
+                })
+            except Exception as e:
+                print(f"Error processing row {idx}: {e}")
+                continue
         
         return jsonify({
             'message': 'Analysis complete',
