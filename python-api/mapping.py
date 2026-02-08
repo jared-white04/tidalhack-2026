@@ -39,21 +39,16 @@ Below is the columns and rows for each assigned file in the given file directory
 #     return
 
 def compute_custom_dtw(series_a, series_b):
-    """
-    Standard DTW implementation to find the optimal alignment path.
-    """
     n, m = len(series_a), len(series_b)
     cost_matrix = np.full((n + 1, m + 1), np.inf)
     cost_matrix[0, 0] = 0
 
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            # Distance calculation between features
             dist = np.linalg.norm(series_a[i-1] - series_b[j-1])
             cost_matrix[i, j] = dist + min(cost_matrix[i-1, j], 
                                            cost_matrix[i, j-1], 
                                            cost_matrix[i-1, j-1])
-
     path = []
     i, j = n, m
     while i > 0 and j > 0:
@@ -64,79 +59,94 @@ def compute_custom_dtw(series_a, series_b):
         else: j -= 1
     return path[::-1]
 
-def process_directory(directory_path: str):
-    # 1. Setup Output Directory
-    output_folder = os.path.join(directory_path, "Aligned_Results")
+def process_directory(input_path: str):
+    # 1. Identify the Directory
+    # If user passed a file, get the directory containing that file
+    if os.path.isfile(input_path):
+        target_dir = os.path.dirname(input_path)
+    else:
+        target_dir = input_path
+
+    # Use absolute path to avoid confusion
+    target_dir = os.path.abspath(target_dir)
+    output_folder = os.path.join(target_dir, "Aligned_Results")
+
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    # 2. Find and sort files based on "ILI_year_formatted.csv" pattern
-    # Regex extracts the digits between 'ILI_' and '_formatted' 
-    file_paths = glob.glob(os.path.join(directory_path, "ILI_*_formatted.csv"))
+    # 2. Find and sort files
+    file_pattern = os.path.join(target_dir, "ILI_*_formatted.csv")
+    file_paths = glob.glob(file_pattern)
+    
     if not file_paths:
-        return "Error: No files matching 'ILI_year_formatted.csv' found."
+        return f"Error: No files matching 'ILI_year_formatted.csv' found in {target_dir}"
 
     file_metadata = []
     for fp in file_paths:
         match = re.search(r'ILI_(\d+)_formatted\.csv', os.path.basename(fp))
         if match:
-            year = int(match.group(1))
-            file_metadata.append({'path': fp, 'year': year})
+            file_metadata.append({'path': fp, 'year': int(match.group(1))})
     
-    # Sort files chronologically by the extracted year
     sorted_files = sorted(file_metadata, key=lambda x: x['year'])
     
-    # 3. Establish Baseline (First Chronological Year)
-    baseline_info = sorted_files[0]
-    baseline_df = pd.read_csv(baseline_info['path'])
+    # 3. Establish Baseline
+    try:
+        baseline_df = pd.read_csv(sorted_files[0]['path'])
+    except PermissionError:
+        return f"Permission Denied: Close {sorted_files[0]['path']} in Excel and try again."
     
-    # Track anomalies identified by feature_id
     master_df = baseline_df[baseline_df['feature_id'].notnull()].copy()
-    
-    # Starting 'real_log_dist' is the cumulative distance in the first run
-    master_df['real_log_dist'] = master_df['log_dist'].cumsum()
+    # Use 'distance' as the primary log position
+    master_df['real_log_dist'] = master_df['distance']
 
-    # 4. Iterate and Align via DTW
+    # 4. Iterate and Align
     for file_info in sorted_files[1:]:
         current_year = file_info['year']
-        current_df = pd.read_csv(file_info['path'])
+        try:
+            current_df = pd.read_csv(file_info['path'])
+        except PermissionError:
+            return f"Permission Denied: Close {file_info['path']} in Excel."
         
-        # Prepare signals for physical matching (elevation and rotation)
-        base_signal = baseline_df[['elevation', 'rotation']].values
-        curr_signal = current_df[['elevation', 'rotation']].values
+        # signal alignment using angle and elevation
+        base_signal = baseline_df[['elevation', 'angle']].fillna(0).values
+        curr_signal = current_df[['elevation', 'angle']].fillna(0).values
         
-        # Run DTW to align the whole pipeline run
-        path = compute_custom_dtw(base_signal, curr_signal)
-        mapping = dict(path) 
-
+        path_indices = compute_custom_dtw(base_signal, curr_signal)
+        mapping = dict(path_indices)
         year_suffix = f"_{current_year}"
         
-        def get_curr_val(base_idx, col):
+        def get_curr_val(base_idx, col_name_in_csv):
             curr_idx = mapping.get(base_idx)
             if curr_idx is not None and curr_idx < len(current_df):
-                return current_df.iloc[curr_idx][col]
+                return current_df.iloc[curr_idx][col_name_in_csv]
             return np.nan
 
-        # Map current year data back to the original anomaly list
-        master_df[f'rotation{year_suffix}'] = [get_curr_val(i, 'rotation') for i in master_df.index]
-        master_df[f'elevation{year_suffix}'] = [get_curr_val(i, 'elevation') for i in master_df.index]
-        master_df[f'j_len{year_suffix}'] = [get_curr_val(i, 'j_len') for i in master_df.index]
+        # Mapping the specific CSV columns to your desired Master Table headers
+        # CSV 'angle' -> Master 'rotation'
+        master_df[f'rotation{year_suffix}'] = [get_curr_val(i, 'angle') for i in master_df.index]
         
-        # Update Real-position: Accumulated log_dist from the matched positions
-        current_log_distances = [get_curr_val(i, 'log_dist') for i in master_df.index]
-        master_df[f'log_dist{year_suffix}'] = np.cumsum(np.nan_to_num(current_log_distances))
+        # CSV 'elevation' -> Master 'elevation'
+        master_df[f'elevation{year_suffix}'] = [get_curr_val(i, 'elevation') for i in master_df.index]
+        
+        # CSV 'length' -> Master 'j_len' (Joint Length)
+        master_df[f'j_len{year_suffix}'] = [get_curr_val(i, 'length') for i in master_df.index]
+        
+        # CSV 'distance' -> Master 'log_dist'
+        master_df[f'log_dist{year_suffix}'] = [get_curr_val(i, 'distance') for i in master_df.index]
 
-    # 5. Save to the organized folder
-    pipeline_id = os.path.basename(directory_path.rstrip(os.sep))
-    final_filename = f"Master_Alignment_{pipeline_id}.csv"
-    final_output_path = os.path.join(output_folder, final_filename)
+        
+    # 5. Save Results
+    pipeline_id = os.path.basename(target_dir)
+    final_path = os.path.join(output_folder, f"Master_Alignment_{pipeline_id}.csv")
     
-    master_df.to_csv(final_output_path, index=False)
+    master_df.to_csv(final_path, index=False)
+    return f"Success! Master file created at: {final_path}"
 
-    return f"Success! Master file created: {final_output_path}"
+# --- Set your path here ---
+# It's safer to point to the data directory itself
+file_dir = "../data/" 
+
+print(process_directory(file_dir))
 
 
 #C:/Users/marcj/Documents (Computer)/TAMU/Hackathon/tidalhack-2026/
-file_dir = "data/"
-
-print(process_directory(file_dir))
