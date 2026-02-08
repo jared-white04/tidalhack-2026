@@ -73,13 +73,20 @@ def compute_custom_dtw(series_a, series_b, max_distance_threshold=2.0):
     path = []
     i, j = n, m
     while i > 0 and j > 0:
-        path.append((i - 1, j - 1))
+        # path.append((i - 1, j - 1))
         candidates = []
         if i > 0 and j > 0: candidates.append((cost_matrix[i-1, j-1], 0)) 
         if i > 1:           candidates.append((cost_matrix[i-1, j], 1))   
         if j > 1:           candidates.append((cost_matrix[i, j-1], 2))   
-        best_move = min(candidates, key=lambda x: x[0])[1]
         
+        best_move = min(candidates, key=lambda x: x[0])[1]
+        print("best_move: " + str(best_move))
+
+        if best_move > 8:
+            continue 
+        
+        path.append((i - 1, j - 1))
+
         if best_move == 0: i, j = i - 1, j - 1
         elif best_move == 1: i -= 1
         else: j -= 1
@@ -150,6 +157,7 @@ def process_directory(script_path: str):
     
     # Initialize Target Columns
     # log_dist and rotation are initialized as NaN, to be filled by the latest aligned data
+    target_cols = ['confidence', 'severity', 'persistence', 'growth_rate', 'j_len', 'log_dist', 'elevation', 'rotation']
     target_cols = ['confidence', 'severity', 'persistence', 'growth_rate', 'j_len', 'log_dist', 'elevation', 'rotation']
     for col in target_cols:
         if col not in master_df.columns: master_df[col] = np.nan
@@ -346,6 +354,7 @@ def process_directory(script_path: str):
     # Select columns (including persistence)
     final_cols = ['anomaly_no', 'joint_no', 'start_distance', 'anomaly_type', 
                   'confidence', 'severity', 'persistence', 'growth_rate', 'viewed',
+                  'confidence', 'severity', 'persistence', 'growth_rate', 'viewed',
                   'j_len', 'log_dist', 'elevation', 'rotation']
     
     # Append any extra green columns if they exist
@@ -367,6 +376,7 @@ def process_directory(script_path: str):
     print(f"{'='*60}\n")
     
     return f"Success! Results saved to: {final_path}"
+
 
 if __name__ == "__main__":
     print(process_directory(__file__))
